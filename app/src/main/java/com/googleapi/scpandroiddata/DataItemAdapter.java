@@ -2,6 +2,7 @@ package com.googleapi.scpandroiddata;
 
 
 
+import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -32,19 +33,28 @@ public class DataItemAdapter extends RecyclerView.Adapter<DataItemAdapter.DataIt
     @Override
     public void onBindViewHolder(@NonNull DataItemViewHolder holder, int position) {
         DataItem item = dataItems.get(position);
+        Context context = holder.itemView.getContext();
 
-        // Set values with null checks
-        holder.tempValue.setText(item.getTemp_value() != null ? item.getTemp_value() : "N/A");
-        holder.humValue.setText(item.getHum_value() != null ? item.getHum_value() : "N/A");
-        holder.pressureValue.setText(item.getAir_pressure_value() != null ? item.getAir_pressure_value() : "N/A");
-        holder.dateTime.setText(item.getDate_time() != null ? item.getDate_time() : "N/A");
+        // Set values with null checks and text colors
+        setTextWithColor(holder.tempValue, item.getTemp_value(),
+                ContextCompat.getColor(context, R.color.temperature_color));
+        setTextWithColor(holder.humValue, item.getHum_value(),
+                ContextCompat.getColor(context, R.color.humidity_color));
+        setTextWithColor(holder.pressureValue, item.getAir_pressure_value(),
+                ContextCompat.getColor(context, R.color.pressure_color));
+        setTextWithColor(holder.dateTime, item.getDate_time(),
+                ContextCompat.getColor(context, R.color.datetime_color));
 
         // Alternate row colors for better readability
-        if (position % 2 == 0) {
-            holder.itemView.setBackgroundColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.row_even));
-        } else {
-            holder.itemView.setBackgroundColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.row_odd));
-        }
+        int bgColor = position % 2 == 0
+                ? ContextCompat.getColor(context, R.color.row_even)
+                : ContextCompat.getColor(context, R.color.row_odd);
+        holder.itemView.setBackgroundColor(bgColor);
+    }
+
+    private void setTextWithColor(TextView textView, String value, int color) {
+        textView.setText(value != null ? value : "N/A");
+        textView.setTextColor(color);
     }
 
     @Override

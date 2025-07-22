@@ -8,6 +8,11 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <color name="row_even">#FFFFFF</color>
-    <color name="row_odd">#F5F5F5</color>
+
+    <color name="temperature_color">#FF5722</color>  <!-- Orange -->
+    <color name="humidity_color">#2196F3</color>    <!-- Blue -->
+    <color name="pressure_color">#4CAF50</color>    <!-- Green -->
+    <color name="datetime_color">#9C27B0</color>     <!-- Purple -->
+    <color name="row_even">#FAFAFA</color>          <!-- Very light gray -->
+    <color name="row_odd">#FFFFFF</color>           <!-- White -->
 </resources>

@@ -32,8 +32,12 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager.widget.ViewPager;
+import androidx.viewpager2.widget.ViewPager2;
 
 
+import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.tabs.TabLayoutMediator;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import android.Manifest.permission;
@@ -66,7 +70,7 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
     private View historyContainer;
     private static final String PREF_NAME = "DeviceIdHistoryPrefs";
     private static final String HISTORY_KEY = "device_id_history";
-    private static final int MAX_HISTORY_ITEMS = 10;
+    private static final int MAX_HISTORY_ITEMS = 999;
     private DataItemAdapter dataAdapter;
     private SearchHistoryAdapter historyAdapter;
 
@@ -79,6 +83,9 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
     private boolean isLoading = false;
     private boolean showHistory = false;
     private static final int REQUEST_WRITE_STORAGE = 112;
+    private ViewPagerAdapter viewPagerAdapter;
+    private ViewPager2 viewPager;
+    private TabLayout tabLayout;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,10 +97,26 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
 
         initializeViews();
         setupAdapters();
+        viewPager = findViewById(R.id.view_pager);
+        tabLayout = findViewById(R.id.tab_layout);
+
+        setupViewPager();
         loadSearchHistory();
         updateHistorySuggestions();
     }
+    private void setupViewPager() {
+        viewPagerAdapter = new ViewPagerAdapter(this, currentData);
+        viewPager.setAdapter(viewPagerAdapter);
 
+        new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
+            switch (position) {
+                case 0: tab.setText("Temperature"); break;
+                case 1: tab.setText("Humidity"); break;
+                case 2: tab.setText("Pressure"); break;
+                case 3: tab.setText("Table"); break;
+            }
+        }).attach();
+    }
     private void initializeViews() {
         searchInput = findViewById(R.id.search_input);
         searchButton = findViewById(R.id.search_button);
@@ -101,7 +124,7 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         exportButton = findViewById(R.id.export_button);
         manageHistoryButton = findViewById(R.id.manage_history_button);
         progressBar = findViewById(R.id.progress_bar);
-        dataRecyclerView = findViewById(R.id.data_recycler_view);
+       // dataRecyclerView = findViewById(R.id.data_recycler_view);
         historyRecyclerView = findViewById(R.id.history_recycler_view);
         historyContainer = findViewById(R.id.history_container);
 
@@ -113,8 +136,8 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
 
     private void setupAdapters() {
         dataAdapter = new DataItemAdapter(currentData);
-        dataRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-        dataRecyclerView.setAdapter(dataAdapter);
+        //dataRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+       // dataRecyclerView.setAdapter(dataAdapter);
 
         historyAdapter = new SearchHistoryAdapter(searchHistory, this);
         historyRecyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -206,7 +229,7 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         searchInput.setText("");
         currentSearch = "";
         currentData.clear();
-        dataAdapter.updateData(currentData);
+       // dataAdapter.updateData(currentData);
         updateUiState();
     }
 
@@ -323,7 +346,11 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
             }
 
             currentData.addAll(response.getData());
+            currentData.addAll(response.getData());
+           // dataAdapter.updateData(currentData);
             dataAdapter.updateData(currentData);
+            viewPagerAdapter.notifyDataSetChanged(); // Refresh all fragments
+
 
             hasMoreData = response.getData().size() >= PAGE_SIZE;
         }
