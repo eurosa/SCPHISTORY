@@ -5,6 +5,8 @@ package com.googleapi.scpandroiddata;
 import android.graphics.Color;
 import android.os.Bundle;
 import androidx.fragment.app.Fragment;
+
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,8 +15,16 @@ import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.LineData;
 import com.github.mikephil.charting.data.LineDataSet;
+import com.github.mikephil.charting.formatter.ValueFormatter;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class HumidityGraphFragment extends Fragment {
     private static final String ARG_DATA_ITEMS = "data_items";
@@ -50,16 +60,22 @@ public class HumidityGraphFragment extends Fragment {
 
     private void setupHumidityChart(LineChart chart) {
         List<Entry> entries = new ArrayList<>();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
 
-        for (int i = 0; i < dataItems.size(); i++) {
-            DataItem item = dataItems.get(i);
+        for (DataItem item : dataItems) {
             try {
                 float humidity = Float.parseFloat(item.getHum_value());
-                entries.add(new Entry(i, humidity));
-            } catch (NumberFormatException e) {
+                Date date = sdf.parse(item.getDate_time());
+                entries.add(new Entry(date.getTime(), humidity));
+            } catch (NumberFormatException | ParseException e) {
                 // Skip invalid data
             }
         }
+
+        if (entries.isEmpty()) return;
+
+        // Sort entries by timestamp
+        Collections.sort(entries, Comparator.comparing(Entry::getX));
 
         LineDataSet dataSet = new LineDataSet(entries, "Humidity (%)");
         dataSet.setColor(Color.BLUE);
@@ -71,13 +87,33 @@ public class HumidityGraphFragment extends Fragment {
         LineData lineData = new LineData(dataSet);
         chart.setData(lineData);
 
-        // Configure X-axis
         XAxis xAxis = chart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setGranularity(1f);
-        xAxis.setValueFormatter(new DateAxisValueFormatter(dataItems));
+        xAxis.setLabelRotationAngle(-45);
+        xAxis.setValueFormatter(new ValueFormatter() {
+            private final SimpleDateFormat mFormat = new SimpleDateFormat("MM-dd HH:mm");
+
+            @Override
+            public String getFormattedValue(float value) {
+                return mFormat.format(new Date((long) value));
+            }
+        });
+
+        // Set X-axis bounds
+        xAxis.setAxisMinimum(entries.get(0).getX());
+        xAxis.setAxisMaximum(entries.get(entries.size() - 1).getX());
+
+        // Optional: Marker view
+        ChartMarkerView mv = new ChartMarkerView(chart.getContext(), R.layout.custom_marker_view);
+        mv.setChartView(chart);
+        chart.setMarker(mv);
 
         chart.getDescription().setText("Humidity over Time");
-        chart.invalidate(); // refresh
+
+        chart.getData().notifyDataChanged();
+        chart.notifyDataSetChanged();
+        chart.invalidate();
     }
+
 }

@@ -345,7 +345,7 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
                 currentData.clear();
             }
 
-            currentData.addAll(response.getData());
+
             currentData.addAll(response.getData());
            // dataAdapter.updateData(currentData);
             dataAdapter.updateData(currentData);

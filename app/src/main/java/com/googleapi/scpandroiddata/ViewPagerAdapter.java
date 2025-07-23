@@ -29,7 +29,7 @@ public class ViewPagerAdapter extends FragmentStateAdapter {
             case 3:
                 return DataTableFragment.newInstance(dataItems);
             default:
-                return TemperatureGraphFragment.newInstance(dataItems);
+                return DataTableFragment.newInstance(dataItems);
         }
     }
 
