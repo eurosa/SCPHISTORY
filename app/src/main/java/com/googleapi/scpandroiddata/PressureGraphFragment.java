@@ -4,6 +4,8 @@ package com.googleapi.scpandroiddata;
 import android.graphics.Color;
 import android.os.Bundle;
 import androidx.fragment.app.Fragment;
+
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -47,7 +49,7 @@ public class PressureGraphFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_graph, container, false);
         LineChart chart = view.findViewById(R.id.chart);
-
+        Log.d("Date&Time ","Pressure Graph");
         if (dataItems != null && !dataItems.isEmpty()) {
             setupPressureChart(chart);
         }
@@ -72,7 +74,7 @@ public class PressureGraphFragment extends Fragment {
         if (entries.isEmpty()) return;
 
         // Sort entries by timestamp
-        Collections.sort(entries, Comparator.comparing(Entry::getX));
+        entries.sort(Comparator.comparing(Entry::getX));
 
         LineDataSet dataSet = new LineDataSet(entries, "Pressure (hPa)");
         dataSet.setColor(Color.GREEN);

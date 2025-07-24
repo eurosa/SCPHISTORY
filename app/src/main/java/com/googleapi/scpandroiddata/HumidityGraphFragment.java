@@ -50,7 +50,7 @@ public class HumidityGraphFragment extends Fragment {
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_graph, container, false);
         LineChart chart = view.findViewById(R.id.chart);
-
+        Log.d("Date&Time ","Humidity Graph");
         if (dataItems != null && !dataItems.isEmpty()) {
             setupHumidityChart(chart);
         }
@@ -75,7 +75,7 @@ public class HumidityGraphFragment extends Fragment {
         if (entries.isEmpty()) return;
 
         // Sort entries by timestamp
-        Collections.sort(entries, Comparator.comparing(Entry::getX));
+        entries.sort(Comparator.comparing(Entry::getX));
 
         LineDataSet dataSet = new LineDataSet(entries, "Humidity (%)");
         dataSet.setColor(Color.BLUE);

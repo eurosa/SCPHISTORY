@@ -1,7 +1,5 @@
 package com.googleapi.scpandroiddata;
 
-
-
 import android.annotation.TargetApi;
 import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
@@ -11,10 +9,11 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Log;
@@ -35,12 +34,11 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager.widget.ViewPager;
 import androidx.viewpager2.widget.ViewPager2;
 
-
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
-import android.Manifest.permission;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -51,6 +49,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements SearchHistoryAdapter.OnHistoryItemClickListener {
     private static final int PAGE_SIZE = 50;
@@ -65,7 +65,6 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
     private Button exportButton;
     private Button manageHistoryButton;
     private ProgressBar progressBar;
-    private RecyclerView dataRecyclerView;
     private RecyclerView historyRecyclerView;
     private View historyContainer;
     private static final String PREF_NAME = "DeviceIdHistoryPrefs";
@@ -87,6 +86,9 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
     private ViewPager2 viewPager;
     private TabLayout tabLayout;
 
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -104,10 +106,17 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         loadSearchHistory();
         updateHistorySuggestions();
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        executorService.shutdown();
+    }
+
     private void setupViewPager() {
         viewPagerAdapter = new ViewPagerAdapter(this, currentData);
         viewPager.setAdapter(viewPagerAdapter);
-
+        viewPagerAdapter.notifyDataSetChanged();
         new TabLayoutMediator(tabLayout, viewPager, (tab, position) -> {
             switch (position) {
                 case 0: tab.setText("Temperature"); break;
@@ -117,6 +126,7 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
             }
         }).attach();
     }
+
     private void initializeViews() {
         searchInput = findViewById(R.id.search_input);
         searchButton = findViewById(R.id.search_button);
@@ -124,7 +134,6 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         exportButton = findViewById(R.id.export_button);
         manageHistoryButton = findViewById(R.id.manage_history_button);
         progressBar = findViewById(R.id.progress_bar);
-       // dataRecyclerView = findViewById(R.id.data_recycler_view);
         historyRecyclerView = findViewById(R.id.history_recycler_view);
         historyContainer = findViewById(R.id.history_container);
 
@@ -136,9 +145,6 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
 
     private void setupAdapters() {
         dataAdapter = new DataItemAdapter(currentData);
-        //dataRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-       // dataRecyclerView.setAdapter(dataAdapter);
-
         historyAdapter = new SearchHistoryAdapter(searchHistory, this);
         historyRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         historyRecyclerView.setAdapter(historyAdapter);
@@ -149,7 +155,6 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         Set<String> historySet = prefs.getStringSet(HISTORY_KEY, new LinkedHashSet<>());
         searchHistory.clear();
 
-        // Convert Set to List of SearchHistoryItem (if you still want to use the class)
         for (String deviceId : historySet) {
             SearchHistoryItem item = new SearchHistoryItem();
             item.setValue(deviceId);
@@ -161,7 +166,6 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         SharedPreferences prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE);
         Set<String> historySet = new LinkedHashSet<>();
 
-        // Convert List to Set of strings
         for (SearchHistoryItem item : searchHistory) {
             historySet.add(item.getValue());
         }
@@ -186,7 +190,6 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         searchInput.setAdapter(adapter);
     }
 
-    // Replace your current searchData() method with:
     private void searchData() {
         String searchValue = searchInput.getText().toString().trim();
         if (searchValue.isEmpty()) {
@@ -200,22 +203,54 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         isLoading = true;
 
         updateUiState();
-        new FetchDataTask().execute(searchValue, String.valueOf(currentPage));
 
-        // Add to history (simplified version)
-        addToDeviceIdHistory(searchValue);
+        executorService.execute(() -> {
+            try {
+                final ApiResponse response = dataService.getData(searchValue, currentPage, PAGE_SIZE);
+
+                mainHandler.post(() -> {
+                    isLoading = false;
+                    updateUiState();
+
+                    if (response == null || response.getData() == null) {
+                        Toast.makeText(MainActivity.this, "Failed to fetch data", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+
+                    if (currentPage == 1) {
+                        currentData.clear();
+                    }
+                    for (DataItem item : response.getData()) {
+                        Log.d("DEBUG", "Item: deviceId=" + item.getTemp_value() + ", timestamp=" + item.getDate_time() + ", value=" + item.getHum_value());
+                    }
+                    currentData.addAll(response.getData());
+                    dataAdapter.updateData(currentData);
+// Recreate ViewPagerAdapter with updated data
+                    viewPagerAdapter = new ViewPagerAdapter(MainActivity.this, currentData);
+                    viewPager.setAdapter(viewPagerAdapter); // <== this is important to rebind the new adapter
+                    //viewPagerAdapter.notifyDataSetChanged();
+
+                    hasMoreData = response.getData().size() >= PAGE_SIZE;
+                    addToDeviceIdHistory(searchValue);
+                });
+            } catch (IOException e) {
+                e.printStackTrace();
+                mainHandler.post(() -> {
+                    isLoading = false;
+                    updateUiState();
+                    Toast.makeText(MainActivity.this, "Failed to fetch data", Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     private void addToDeviceIdHistory(String deviceId) {
-        // Remove if already exists to avoid duplicates
         searchHistory.removeIf(item -> item.getValue().equals(deviceId));
 
-        // Create new item and add to beginning
         SearchHistoryItem newItem = new SearchHistoryItem();
         newItem.setValue(deviceId);
         searchHistory.add(0, newItem);
 
-        // Keep only last 10 items
         if (searchHistory.size() > MAX_HISTORY_ITEMS) {
             searchHistory = searchHistory.subList(0, MAX_HISTORY_ITEMS);
         }
@@ -229,35 +264,88 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         searchInput.setText("");
         currentSearch = "";
         currentData.clear();
-       // dataAdapter.updateData(currentData);
         updateUiState();
     }
 
     private void exportToExcel() {
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // Android 13+ - No permission needed for Downloads folder
-            new ExportDataTask().execute(currentSearch);
+            executeExportTask();
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             // Android 11-12 - Check if we have MANAGE_EXTERNAL_STORAGE
             if (Environment.isExternalStorageManager()) {
-                new ExportDataTask().execute(currentSearch);
+                executeExportTask();
             } else {
                 requestManageStoragePermission();
             }
         } else {
             // Android 10 and below - Use old WRITE_EXTERNAL_STORAGE
-            if (ContextCompat.checkSelfPermission(this, permission.WRITE_EXTERNAL_STORAGE)
+            if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
                     == PackageManager.PERMISSION_GRANTED) {
-                new ExportDataTask().execute(currentSearch);
+                executeExportTask();
             } else {
                 ActivityCompat.requestPermissions(this,
-                        new String[]{permission.WRITE_EXTERNAL_STORAGE},
+                        new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
                         REQUEST_WRITE_STORAGE);
             }
         }
-
     }
+
+    private void executeExportTask() {
+        ProgressDialog progressDialog = new ProgressDialog(MainActivity.this);
+        progressDialog.setMessage("Exporting data...");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+
+        executorService.execute(() -> {
+            try {
+                InputStream inputStream = dataService.exportToExcel(currentSearch);
+                if (inputStream != null) {
+                    String fileName = "SCP_Export_" + System.currentTimeMillis() + ".csv";
+                    String mimeType = "text/csv";
+
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                    values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
+                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+
+                    ContentResolver resolver = getContentResolver();
+                    Uri uri = null;
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    }
+
+                    if (uri != null) {
+                        OutputStream outputStream = resolver.openOutputStream(uri);
+                        if (outputStream != null) {
+                            byte[] buffer = new byte[1024];
+                            int length;
+                            while ((length = inputStream.read(buffer)) > 0) {
+                                outputStream.write(buffer, 0, length);
+                            }
+                            outputStream.close();
+                        }
+                        inputStream.close();
+
+                        final Uri finalUri = uri;
+                        mainHandler.post(() -> {
+                            progressDialog.dismiss();
+                            showExportSuccessDialog(finalUri);
+                        });
+                        return;
+                    }
+                }
+            } catch (IOException e) {
+                Log.e("ExportDataTask", "Export failed", e);
+            }
+
+            mainHandler.post(() -> {
+                progressDialog.dismiss();
+                Toast.makeText(MainActivity.this, "Export failed", Toast.LENGTH_SHORT).show();
+            });
+        });
+    }
+
     @TargetApi(Build.VERSION_CODES.R)
     private void requestManageStoragePermission() {
         try {
@@ -265,7 +353,6 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
             intent.setData(Uri.parse("package:" + getPackageName()));
             startActivityForResult(intent, REQUEST_MANAGE_STORAGE);
         } catch (Exception e) {
-            // Fallback if the intent fails
             Intent intent = new Intent();
             intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
             startActivityForResult(intent, REQUEST_MANAGE_STORAGE);
@@ -275,22 +362,22 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode ==  REQUEST_MANAGE_STORAGE) {
+        if (requestCode == REQUEST_MANAGE_STORAGE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 if (Environment.isExternalStorageManager()) {
-                    new ExportDataTask().execute(currentSearch);
+                    executeExportTask();
                 } else {
                     Toast.makeText(this, "Permission denied. Cannot export without storage access.", Toast.LENGTH_SHORT).show();
                 }
             }
         }
     }
+
     private void toggleHistoryVisibility() {
         showHistory = !showHistory;
         historyContainer.setVisibility(showHistory ? View.VISIBLE : View.GONE);
         manageHistoryButton.setText(showHistory ? "Hide History" : "Manage History");
 
-        // Refresh history when showing
         if (showHistory) {
             loadSearchHistory();
             historyAdapter.updateData(searchHistory);
@@ -315,112 +402,6 @@ public class MainActivity extends AppCompatActivity implements SearchHistoryAdap
         saveSearchHistory();
         updateHistorySuggestions();
         historyAdapter.updateData(searchHistory);
-    }
-
-    private class FetchDataTask extends AsyncTask<String, Void, ApiResponse> {
-        @Override
-        protected ApiResponse doInBackground(String... params) {
-            String searchValue = params[0];
-            int page = Integer.parseInt(params[1]);
-
-            try {
-                return dataService.getData(searchValue, page, PAGE_SIZE);
-            } catch (IOException e) {
-                e.printStackTrace();
-                return null;
-            }
-        }
-
-        @Override
-        protected void onPostExecute(ApiResponse response) {
-            isLoading = false;
-            updateUiState();
-
-            if (response == null || response.getData() == null) {
-                Toast.makeText(MainActivity.this, "Failed to fetch data", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            if (currentPage == 1) {
-                currentData.clear();
-            }
-
-
-            currentData.addAll(response.getData());
-           // dataAdapter.updateData(currentData);
-            dataAdapter.updateData(currentData);
-            viewPagerAdapter.notifyDataSetChanged(); // Refresh all fragments
-
-
-            hasMoreData = response.getData().size() >= PAGE_SIZE;
-        }
-    }
-
-    private class ExportDataTask extends AsyncTask<String, Void, Uri> {
-        private ProgressDialog progressDialog;
-
-        @Override
-        protected void onPreExecute() {
-            super.onPreExecute();
-            progressDialog = new ProgressDialog(MainActivity.this);
-            progressDialog.setMessage("Exporting data...");
-            progressDialog.setCancelable(false);
-            progressDialog.show();
-        }
-
-        @Override
-        protected Uri doInBackground(String... params) {
-            String deviceId = params[0];
-
-            try {
-                InputStream inputStream = dataService.exportToExcel(deviceId);
-                if (inputStream != null) {
-                    // Create a file in the Downloads directory using MediaStore
-                    String fileName = "SCP_Export_" + System.currentTimeMillis() + ".csv";
-                    String mimeType = "text/csv";
-
-                    ContentValues values = new ContentValues();
-                    values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
-                    values.put(MediaStore.Downloads.MIME_TYPE, mimeType);
-                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-
-                    ContentResolver resolver = getContentResolver();
-                    Uri uri = null;
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                        uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                    }
-
-                    if (uri != null) {
-                        OutputStream outputStream = resolver.openOutputStream(uri);
-                        if (outputStream != null) {
-                            byte[] buffer = new byte[1024];
-                            int length;
-                            while ((length = inputStream.read(buffer)) > 0) {
-                                outputStream.write(buffer, 0, length);
-                            }
-                            outputStream.close();
-                        }
-                        inputStream.close();
-                        return uri;
-                    }
-                }
-            } catch (IOException e) {
-                Log.e("ExportDataTask", "Export failed", e);
-            }
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Uri fileUri) {
-            progressDialog.dismiss();
-
-            if (fileUri != null) {
-                // Show success and offer to open/share the file
-                showExportSuccessDialog(fileUri);
-            } else {
-                Toast.makeText(MainActivity.this, "Export failed", Toast.LENGTH_SHORT).show();
-            }
-        }
     }
 
     private void showExportSuccessDialog(Uri fileUri) {
