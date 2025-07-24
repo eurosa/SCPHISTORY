@@ -98,9 +98,12 @@ public class TemperatureGraphFragment extends Fragment {
         XAxis xAxis = chart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setGranularity(1f);
+        chart.getAxisLeft().setTextColor(Color.RED);
+        chart.getAxisRight().setEnabled(true); // Optional
+        xAxis.setTextColor(Color.RED); // Replace RED with any color you want
         xAxis.setLabelRotationAngle(-45);
         xAxis.setValueFormatter(new ValueFormatter() {
-            private final SimpleDateFormat mFormat = new SimpleDateFormat("MM-dd HH:mm");
+            private final SimpleDateFormat mFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
             @Override
             public String getFormattedValue(float value) {

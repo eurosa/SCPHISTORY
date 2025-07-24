@@ -96,8 +96,11 @@ public class PressureGraphFragment extends Fragment {
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setLabelRotationAngle(-45);
         xAxis.setGranularity(1f);
+        chart.getAxisLeft().setTextColor(Color.GREEN);
+        chart.getAxisRight().setEnabled(true); // Optional
+        xAxis.setTextColor(Color.GREEN); // Replace RED with any color you want
         xAxis.setValueFormatter(new ValueFormatter() {
-            private final SimpleDateFormat mFormat = new SimpleDateFormat("MM-dd HH:mm");
+            private final SimpleDateFormat mFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
             @Override
             public String getFormattedValue(float value) {

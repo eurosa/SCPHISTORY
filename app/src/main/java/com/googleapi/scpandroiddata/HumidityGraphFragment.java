@@ -79,9 +79,9 @@ public class HumidityGraphFragment extends Fragment {
 
         LineDataSet dataSet = new LineDataSet(entries, "Humidity (%)");
         dataSet.setColor(Color.BLUE);
-        dataSet.setValueTextColor(Color.BLACK);
+        dataSet.setValueTextColor(Color.YELLOW);
         dataSet.setLineWidth(2f);
-        dataSet.setCircleColor(Color.BLUE);
+        dataSet.setCircleColor(Color.GREEN);
         dataSet.setCircleRadius(4f);
 
         LineData lineData = new LineData(dataSet);
@@ -90,9 +90,12 @@ public class HumidityGraphFragment extends Fragment {
         XAxis xAxis = chart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setGranularity(1f);
+        xAxis.setTextColor(Color.WHITE); // Replace RED with any color you want
         xAxis.setLabelRotationAngle(-45);
+        chart.getAxisLeft().setTextColor(Color.WHITE);
+        chart.getAxisRight().setEnabled(true); // Optional
         xAxis.setValueFormatter(new ValueFormatter() {
-            private final SimpleDateFormat mFormat = new SimpleDateFormat("MM-dd HH:mm");
+            private final SimpleDateFormat mFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
             @Override
             public String getFormattedValue(float value) {
